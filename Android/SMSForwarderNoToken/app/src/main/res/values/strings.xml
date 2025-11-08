@@ -1,0 +1,8 @@
+
+<resources>
+  <string name="app_name">SMS Forwarder (No Token)</string>
+  <string name="settings">Configuration</string>
+  <string name="save">Enregistrer</string>
+  <string name="numbers_hint">Numéros à filtrer (séparés par des virgules, ex: +33612345678,+33787654321)</string>
+  <string name="backend_url">URL du script PHP (https://.../index.php)</string>
+</resources>
