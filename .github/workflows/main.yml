@@ -1,4 +1,4 @@
-name: Android CI (no-wrapper)
+name: Android CI (stable)
 
 on:
   push:
@@ -18,33 +18,40 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Installe le SDK Android + les composants dont le build a besoin
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # (debug) afficher l'arborescence et détecter où est le projet Android
+      - name: Install Android SDK components
+        run: |
+          sdkmanager --install "platform-tools" \
+                              "platforms;android-34" \
+                              "build-tools;34.0.0" \
+                              "build-tools;34.0.2" || true
+          yes | sdkmanager --licenses
+
+      # (debug) montre où est le projet et les gradle files
       - name: Detect Android project dir
         id: detect
         run: |
           set -e
-          echo "Repository tree (top):"
-          pwd && ls -la
-          echo "Gradle files (depth<=3):"
+          echo "Root: $(pwd)"
+          echo "--- Files ---"
           find . -maxdepth 3 -type f -name "build.gradle*" -print
           DIR=$(git ls-files | grep -E "/app/build.gradle$" | head -n1 | sed 's#/app/build.gradle##')
           if [ -z "$DIR" ]; then
-            echo "❌ Aucun projet Android trouvé (manque app/build.gradle)"
-            exit 1
+            echo "❌ Aucun projet Android trouvé (app/build.gradle manquant)"; exit 1
           fi
-          echo "Projet Android: $DIR"
+          echo "✅ Projet Android: $DIR"
           echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
 
-      # ✅ Utilise Gradle fourni par l'action (pas le wrapper)
-      - name: Build Debug APK with Gradle 8.9 (no wrapper)
+      # Utilise Gradle fourni par l'action (pas le wrapper local) en version 8.7 (compatible AGP 8.6)
+      - name: Build Debug APK (Gradle 8.7, no wrapper)
         uses: gradle/gradle-build-action@v3
         with:
-          gradle-version: 8.9
+          gradle-version: 8.7
           build-root-directory: ${{ env.PROJECT_DIR }}
-          arguments: :app:assembleDebug
+          arguments: :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
