@@ -1,26 +1,55 @@
-name: Android CI
+name: Android CI (auto-detect)
+
 on:
   push:
     branches: [ "main" ]
   pull_request:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-      - name: Build Debug APK
+
+      # (debug) Liste les fichiers pour vérifier l'arborescence
+      - name: Show repository tree (top 200)
         run: |
-          chmod +x ./gradlew || true
-          ./gradlew :app:assembleDebug
+          pwd
+          ls -la
+          find . -maxdepth 3 -type f -name "build.gradle*" | head -n 200
+
+      # 🔎 Trouve automatiquement le dossier Android (celui qui contient app/build.gradle)
+      - name: Detect Android project dir
+        id: detect
+        run: |
+          set -e
+          DIR=$(git ls-files | grep -E "/app/build.gradle$" | head -n1 | sed 's#/app/build.gradle##')
+          if [ -z "$DIR" ]; then
+            echo "❌ Aucun projet Android trouvé (app/build.gradle manquant)."
+            exit 1
+          fi
+          echo "Projet Android: $DIR"
+          echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
+
+      # Utilise Gradle côté runner (pas besoin du wrapper à la racine)
+      - name: Build Debug APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          build-root-directory: ${{ env.PROJECT_DIR }}
+          arguments: :app:assembleDebug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
