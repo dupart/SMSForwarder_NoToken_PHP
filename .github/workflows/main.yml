@@ -1,4 +1,4 @@
-name: Android CI (auto-detect)
+name: Android CI (no-wrapper)
 
 on:
   push:
@@ -21,30 +21,28 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # (debug) Liste les fichiers pour vérifier l'arborescence
-      - name: Show repository tree (top 200)
-        run: |
-          pwd
-          ls -la
-          find . -maxdepth 3 -type f -name "build.gradle*" | head -n 200
-
-      # 🔎 Trouve automatiquement le dossier Android (celui qui contient app/build.gradle)
+      # (debug) afficher l'arborescence et détecter où est le projet Android
       - name: Detect Android project dir
         id: detect
         run: |
           set -e
+          echo "Repository tree (top):"
+          pwd && ls -la
+          echo "Gradle files (depth<=3):"
+          find . -maxdepth 3 -type f -name "build.gradle*" -print
           DIR=$(git ls-files | grep -E "/app/build.gradle$" | head -n1 | sed 's#/app/build.gradle##')
           if [ -z "$DIR" ]; then
-            echo "❌ Aucun projet Android trouvé (app/build.gradle manquant)."
+            echo "❌ Aucun projet Android trouvé (manque app/build.gradle)"
             exit 1
           fi
           echo "Projet Android: $DIR"
           echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
 
-      # Utilise Gradle côté runner (pas besoin du wrapper à la racine)
-      - name: Build Debug APK
+      # ✅ Utilise Gradle fourni par l'action (pas le wrapper)
+      - name: Build Debug APK with Gradle 8.9 (no wrapper)
         uses: gradle/gradle-build-action@v3
         with:
+          gradle-version: 8.9
           build-root-directory: ${{ env.PROJECT_DIR }}
           arguments: :app:assembleDebug
 
