@@ -1,4 +1,4 @@
-name: Android CI (diagnostic)
+name: Android CI (Gradle 8.7 pinned)
 
 on:
   push:
@@ -25,19 +25,16 @@ jobs:
         run: |
           sdkmanager --install "platform-tools" \
                               "platforms;android-34" \
-                              "build-tools;34.0.2" \
-                              "build-tools;34.0.0" || true
+                              "build-tools;34.0.2" || true
           yes | sdkmanager --licenses
 
-      # Montrer l'arborescence et détecter le projet Android
+      # Debug: montre l'arborescence et repère le projet Android
       - name: Detect Android project dir
         id: detect
         shell: bash
         run: |
           set -e
-          echo "== Repo root: =="
-          pwd && ls -la
-          echo "== build.gradle* repérés (profondeur<=4): =="
+          echo "== build.gradle* =="
           find . -maxdepth 4 -type f -name "build.gradle*" -print
           DIR=$(git ls-files | grep -E "/app/build.gradle$" | head -n1 | sed 's#/app/build.gradle##')
           if [ -z "$DIR" ]; then
@@ -46,17 +43,14 @@ jobs:
           fi
           echo "✅ Projet Android: $DIR"
           echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
-          echo "== Aperçu de $DIR/app/build.gradle =="
-          sed -n '1,200p' "$DIR/app/build.gradle" || true
 
-      - name: Set up Gradle caching
-        uses: gradle/actions/setup-gradle@v3
-
-      # 👉 Lancer Gradle SANS wrapper local, en mode verbeux
-      - name: Build Debug APK (verbose)
-        shell: bash
-        run: |
-          gradle -p "${{ env.PROJECT_DIR }}" :app:assembleDebug --stacktrace --info --no-daemon
+      # ⚠️ On EXÉCUTE Gradle 8.7 fourni par l'action (pas le Gradle système 9.x)
+      - name: Build Debug APK (Gradle 8.7)
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.7
+          build-root-directory: ${{ env.PROJECT_DIR }}
+          arguments: :app:assembleDebug --stacktrace --info --no-daemon
 
       - name: Upload APK
         if: success()
