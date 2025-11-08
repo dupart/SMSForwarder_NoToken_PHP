@@ -1,4 +1,4 @@
-name: Android CI (stable)
+name: Android CI (diagnostic)
 
 on:
   push:
@@ -18,7 +18,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Installe le SDK Android + les composants dont le build a besoin
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -26,34 +25,41 @@ jobs:
         run: |
           sdkmanager --install "platform-tools" \
                               "platforms;android-34" \
-                              "build-tools;34.0.0" \
-                              "build-tools;34.0.2" || true
+                              "build-tools;34.0.2" \
+                              "build-tools;34.0.0" || true
           yes | sdkmanager --licenses
 
-      # (debug) montre où est le projet et les gradle files
+      # Montrer l'arborescence et détecter le projet Android
       - name: Detect Android project dir
         id: detect
+        shell: bash
         run: |
           set -e
-          echo "Root: $(pwd)"
-          echo "--- Files ---"
-          find . -maxdepth 3 -type f -name "build.gradle*" -print
+          echo "== Repo root: =="
+          pwd && ls -la
+          echo "== build.gradle* repérés (profondeur<=4): =="
+          find . -maxdepth 4 -type f -name "build.gradle*" -print
           DIR=$(git ls-files | grep -E "/app/build.gradle$" | head -n1 | sed 's#/app/build.gradle##')
           if [ -z "$DIR" ]; then
-            echo "❌ Aucun projet Android trouvé (app/build.gradle manquant)"; exit 1
+            echo "❌ Aucun projet Android trouvé (app/build.gradle introuvable)."
+            exit 1
           fi
           echo "✅ Projet Android: $DIR"
           echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
+          echo "== Aperçu de $DIR/app/build.gradle =="
+          sed -n '1,200p' "$DIR/app/build.gradle" || true
 
-      # Utilise Gradle fourni par l'action (pas le wrapper local) en version 8.7 (compatible AGP 8.6)
-      - name: Build Debug APK (Gradle 8.7, no wrapper)
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 8.7
-          build-root-directory: ${{ env.PROJECT_DIR }}
-          arguments: :app:assembleDebug --stacktrace --no-daemon
+      - name: Set up Gradle caching
+        uses: gradle/actions/setup-gradle@v3
+
+      # 👉 Lancer Gradle SANS wrapper local, en mode verbeux
+      - name: Build Debug APK (verbose)
+        shell: bash
+        run: |
+          gradle -p "${{ env.PROJECT_DIR }}" :app:assembleDebug --stacktrace --info --no-daemon
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
